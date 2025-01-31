@@ -1,0 +1,31 @@
+{
+  "name": "wb-destroyer",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "RuneScape",
+    "RuneScape 3",
+    "Warbands",
+    "Wilderness Warbands",
+    "Discord",
+    "Discord bot",
+    "bot",
+    "m2a",
+    "Agência m2a",
+    "Jota"
+  ],
+  "author": "Jota / José Guilherme Pandolfi",
+  "license": "MIT",
+  "description": "Bot para Discord que auxilia jogadores de RuneScape 3 a participarem do minigame Wilderness Warbands",
+  "dependencies": {
+    "discord.js": "^14.17.3",
+    "dotenv": "^16.4.7",
+    "table": "^6.9.0"
+  }
+}
