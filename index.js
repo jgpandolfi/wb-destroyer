@@ -697,7 +697,8 @@ client.on("messageCreate", async (mensagem) => {
           resultado.status === "DESCONHECIDO" &&
           !resultado.suprimentos &&
           !resultado.hostil &&
-          !resultado.alianca
+          !resultado.alianca &&
+          !resultado.tempoRestante
         ) {
           console.log(
             `❌ Mundo ${resultado.mundo} reportado por ${reportador.nickname} foi ignorado: o jogador não enviou nenhuma informações reconhecível`
