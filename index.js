@@ -1,6 +1,8 @@
 import { Client, GatewayIntentBits, SlashCommandBuilder } from "discord.js"
 import dotenv from "dotenv"
 import { table } from "table"
+import { memoryUsage, cpuUsage } from "process"
+import os from "os"
 
 dotenv.config()
 
@@ -41,10 +43,20 @@ const cmdTable = new SlashCommandBuilder()
     "Exibe um quadro com as informações dos mundos reportados em formato de tabela"
   )
 
-// Adicione o comando /Timelist ao registro de comandos
+// Registra o comando /timelist (quadro de tempos restantes)
 const cmdTimelist = new SlashCommandBuilder()
   .setName("timelist")
   .setDescription("Exibe uma lista dos mundos com tempo restante conhecido")
+
+// Definindo o comando /ping
+const cmdPing = new SlashCommandBuilder()
+  .setName("ping")
+  .setDescription("Exibe a latência (ping) do bot")
+
+// Registra o comando slash /botstatus
+const cmdBotstatus = new SlashCommandBuilder()
+  .setName("botstatus")
+  .setDescription("Exibe informações detalhadas sobre o status do bot")
 
 // Lista de mundos (servidores) válidos do RuneScape
 const mundosValidos = [
@@ -644,11 +656,40 @@ function processarMensagem(textoMensagem) {
   return resultado
 }
 
+// Funções auxiliares para o comando /botstatus
+function formatarBytes(bytes) {
+  const units = ["B", "KB", "MB", "GB"]
+  let value = bytes
+  let unitIndex = 0
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex++
+  }
+
+  return `${value.toFixed(2)} ${units[unitIndex]}`
+}
+
+function formatarUptime(segundos) {
+  const dias = Math.floor(segundos / 86400)
+  const horas = Math.floor((segundos % 86400) / 3600)
+  const minutos = Math.floor((segundos % 3600) / 60)
+  const segs = Math.floor(segundos % 60)
+
+  return `${dias}d ${horas}h ${minutos}m ${segs}s`
+}
+
 client.once("ready", async () => {
   try {
     console.log(`✅ Bot online como ${client.user.tag}`)
-    await client.application.commands.set([cmdList, cmdTable, cmdTimelist])
-    console.log("✅ Comandos /list, /table e /timelist registrados com sucesso")
+    await client.application.commands.set([
+      cmdList,
+      cmdTable,
+      cmdTimelist,
+      cmdPing,
+      cmdBotstatus,
+    ])
+    console.log("✅ Comandos slash registrados com sucesso")
   } catch (erro) {
     console.error(`❌ Erro ao registrar comandos slash: ${erro.message}`)
   }
@@ -850,6 +891,150 @@ client.on("interactionCreate", async (interaction) => {
       console.error(`❌ Erro ao executar /Timelist: ${erro.message}`)
       await interaction.reply({
         content: "❌ Ocorreu um erro ao gerar a lista de tempos!",
+        ephemeral: true,
+      })
+    }
+  }
+  if (interaction.commandName === "ping") {
+    try {
+      // Obtém a latência do WebSocket
+      const ping = Math.round(client.ws.ping)
+
+      // Responde ao usuário com o ping
+      await interaction.reply("🏓 Pong! `" + ping + " ms`")
+    } catch (erro) {
+      console.error(`❌ Erro ao executar /ping: ${erro.message}`)
+      await interaction.reply({
+        content: "❌ Ocorreu um erro ao obter o ping!",
+        ephemeral: true,
+      })
+    }
+  }
+  if (interaction.commandName === "botstatus") {
+    try {
+      // Coleta informações do sistema
+      const memoria = process.memoryUsage()
+      const cpu = process.cpuUsage()
+      const uptime = process.uptime()
+
+      // Calcula uso de memória
+      const memoriaTotal = os.totalmem()
+      const memoriaLivre = os.freemem()
+      const memoriaUsada = memoriaTotal - memoriaLivre
+      const porcentagemMemoria = ((memoriaUsada / memoriaTotal) * 100).toFixed(
+        2
+      )
+
+      // Calcula uso de CPU
+      const cpuCount = os.cpus().length
+      const cargaCPU = os.loadavg()[0]
+      const porcentagemCPU = ((cargaCPU / cpuCount) * 100).toFixed(2)
+
+      // Cria o embed
+      const embed = {
+        color: 0x0099ff,
+        title: "📊 Status do Bot",
+        fields: [
+          {
+            name: "🤖 WB Destroyer by Jota",
+            value: [
+              `**Discord Tag:** ${client.user.tag}`,
+              `**Discord ID:** ${client.user.id}`,
+              `**Ping:** ${Math.round(client.ws.ping)}ms`,
+              `**Uptime:** ${formatarUptime(uptime)}`,
+              `**Versão Node.js:** ${process.version}`,
+              `**Plataforma:** ${process.platform}`,
+              `**Diretório:** ${process.cwd()}`,
+              `**Process ID:** ${process.pid}`,
+            ].join("\n"),
+            inline: false,
+          },
+          {
+            name: "💾 Uso de Memória",
+            value: [
+              `**RAM Total:** ${formatarBytes(memoriaTotal)}`,
+              `**RAM Usada:** ${formatarBytes(
+                memoriaUsada
+              )} (${porcentagemMemoria}%)`,
+              `**RAM Livre:** ${formatarBytes(memoriaLivre)} (${(
+                100 - porcentagemMemoria
+              ).toFixed(2)}%)`,
+              `**Heap Usado:** ${formatarBytes(memoria.heapUsed)}`,
+              `**Heap Total:** ${formatarBytes(memoria.heapTotal)}`,
+              `**Heap Disponível:** ${formatarBytes(
+                memoria.heapTotal - memoria.heapUsed
+              )}`,
+              `**RSS (Resident Set Size):** ${formatarBytes(memoria.rss)}`,
+              `**Memória Externa:** ${formatarBytes(memoria.external)}`,
+              `**Array Buffers:** ${formatarBytes(memoria.arrayBuffers || 0)}`,
+              `**Buffer Cache:** ${formatarBytes(
+                os.totalmem() - os.freemem() - memoria.heapTotal
+              )}`,
+            ].join("\n"),
+            inline: false,
+          },
+          {
+            name: "🔄 Processamento",
+            value: [
+              `**Modelo CPU:** ${os.cpus()[0].model}`,
+              `**Número de núcleos:** ${cpuCount}`,
+              `**Arquitetura:** ${os.arch()}`,
+              `**Uso atual de CPU:** ${porcentagemCPU}%`,
+              `**Sistema:** ${os.platform()} ${os.release()}`,
+            ].join("\n"),
+            inline: false,
+          },
+          {
+            name: "📈 Estatísticas Discord",
+            value: [
+              `**Servidores:** ${client.guilds.cache.size}`,
+              `**Canais:** ${client.channels.cache.size}`,
+              `**Canais de Texto:** ${
+                client.channels.cache.filter((c) => c.type === 0).size
+              }`,
+              `**Canais de Voz:** ${
+                client.channels.cache.filter((c) => c.type === 2).size
+              }`,
+              `**Categorias:** ${
+                client.channels.cache.filter((c) => c.type === 4).size
+              }`,
+              `**Usuários Totais:** ${client.users.cache.size}`,
+              `**Emojis:** ${client.emojis.cache.size}`,
+            ].join("\n"),
+            inline: false,
+          },
+          {
+            name: "🎮 Funcionalidades Warbands",
+            value: [
+              `**Mundos Armazenados:** ${mundos.length}`,
+              `**Mundos por Loc:**`,
+              `• DWF: ${mundos.filter((m) => m.loc === "dwf").length}`,
+              `• ELM: ${mundos.filter((m) => m.loc === "elm").length}`,
+              `• RDI: ${mundos.filter((m) => m.loc === "rdi").length}`,
+              `**Mundos Beamed:** ${
+                mundos.filter((m) => m.status === "BEAMED").length
+              }`,
+              `**Mundos com PKs:** ${mundos.filter((m) => m.hostil).length}`,
+              `**Mundos com Tempo:** ${
+                mundos.filter(
+                  (m) => m.tempoRestante && m.tempoRestante.quantoFaltava
+                ).length
+              }`,
+            ].join("\n"),
+            inline: false,
+          },
+        ],
+        timestamp: new Date().toISOString(),
+        footer: {
+          text: "Coded by Jota",
+        },
+      }
+
+      await interaction.reply({ embeds: [embed] })
+    } catch (erro) {
+      console.error(`❌ Erro ao executar /botstatus: ${erro.message}`)
+      await interaction.reply({
+        content: "❌ Ocorreu um erro ao obter o status do bot!",
         ephemeral: true,
       })
     }
