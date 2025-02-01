@@ -59,29 +59,29 @@ function obterEmoji(nomeEmoji) {
 // Registra o comando slash "list"
 const cmdList = new SlashCommandBuilder()
   .setName("list")
-  .setDescription("Lista os mundos reportados organizados por localidade")
+  .setDescription("🧾 Lista os mundos reportados organizados por localidade")
 
 // Registra o comando slash "quadro"
 const cmdTable = new SlashCommandBuilder()
   .setName("table")
   .setDescription(
-    "Exibe um quadro com as informações dos mundos reportados em formato de tabela"
+    "🖼️ Exibe um quadro com as informações dos mundos reportados em formato de tabela"
   )
 
 // Registra o comando /timelist (quadro de tempos restantes)
 const cmdTimelist = new SlashCommandBuilder()
   .setName("timelist")
-  .setDescription("Exibe uma lista dos mundos com tempo restante conhecido")
+  .setDescription("⏰ Exibe uma lista dos mundos com tempo restante conhecido")
 
 // Definindo o comando /ping
 const cmdPing = new SlashCommandBuilder()
   .setName("ping")
-  .setDescription("Exibe a latência (ping) do bot")
+  .setDescription("🏓 Exibe a latência (ping) do bot")
 
 // Registra o comando slash /botstatus
 const cmdBotstatus = new SlashCommandBuilder()
   .setName("botstatus")
-  .setDescription("Exibe informações detalhadas sobre o status do bot")
+  .setDescription("🤖 Exibe informações detalhadas sobre o status do bot")
 
 // Lista de mundos (servidores) válidos do RuneScape
 const mundosValidos = [
@@ -736,7 +736,7 @@ client.on("messageCreate", async (mensagem) => {
           console.log(
             `❌ Mundo ${resultado.mundo} reportado por ${nickname} foi recusado: não existe no RuneScape`
           )
-          await mensagem.react("❌")
+          await mensagem.react(obterEmoji("errado"))
           return
         }
 
@@ -769,7 +769,7 @@ client.on("messageCreate", async (mensagem) => {
           console.log(
             `❌ Mundo ${resultado.mundo} reportado por ${reportador.nickname} foi ignorado: o jogador não enviou nenhuma informações reconhecível`
           )
-          await mensagem.react("❓")
+          await mensagem.react(obterEmoji("ajuda"))
           return
         }
 
@@ -824,14 +824,18 @@ client.on("messageCreate", async (mensagem) => {
             `✅ Novo mundo ${resultado.mundo} adicionado por ${reportador.nickname} com todas as informações disponíveis`
           )
         } else {
-          await mensagem.reply("Não sei a loc! Envia a msg completa com a loc")
-          await mensagem.react("❓")
+          await mensagem.reply(
+            `Não sei a loc! Envia a msg completa com a loc! ${obterEmoji(
+              "ajuda"
+            )}`
+          )
+          await mensagem.react(obterEmoji("ajuda"))
           console.log(
             `❌ ${reportador.nickname} tentou atualizar o mundo ${resultado.mundo} mas não sabemos a loc`
           )
           return
         }
-        await mensagem.react("✅")
+        await mensagem.react(obterEmoji("certo"))
       }
     }
   } catch (erro) {
@@ -926,7 +930,9 @@ client.on("interactionCreate", async (interaction) => {
       const ping = Math.round(client.ws.ping)
 
       // Responde ao usuário com o ping
-      await interaction.reply("🏓 Pong! `" + ping + " ms`")
+      await interaction.reply(
+        obterEmoji("pingpong") + " Pong! `" + ping + " ms`"
+      )
     } catch (erro) {
       console.error(`❌ Erro ao executar /ping: ${erro.message}`)
       await interaction.reply({
@@ -961,97 +967,103 @@ client.on("interactionCreate", async (interaction) => {
         title: "📊 Status do Bot",
         fields: [
           {
-            name: "🤖 WB Destroyer by Jota",
+            name: `${obterEmoji("servidores")} WB Destroyer by Jota`,
             value: [
-              `**Discord Tag:** ${client.user.tag}`,
-              `**Discord ID:** ${client.user.id}`,
-              `**Ping:** ${Math.round(client.ws.ping)}ms`,
-              `**Uptime:** ${formatarUptime(uptime)}`,
-              `**Versão Node.js:** ${process.version}`,
-              `**Plataforma:** ${process.platform}`,
-              `**Diretório:** ${process.cwd()}`,
-              `**Process ID:** ${process.pid}`,
+              "Discord Tag: `" + client.user.tag + "`",
+              "Discord ID: `" + client.user.id + "`",
+              "Ping: `" + Math.round(client.ws.ping) + "`",
+              "Uptime: `" + formatarUptime(uptime) + "`",
+              "Versão Node.js: `" + process.version + "`",
+              "Plataforma: `" + process.platform + "`",
+              "Diretório: `" + process.cwd() + "`",
+              "Process ID: `" + process.pid + "`",
             ].join("\n"),
             inline: false,
           },
           {
-            name: "💾 Uso de Memória",
+            name: `${obterEmoji("memoria")} Uso de Memória`,
             value: [
-              `**RAM Total:** ${formatarBytes(memoriaTotal)}`,
-              `**RAM Usada:** ${formatarBytes(
-                memoriaUsada
-              )} (${porcentagemMemoria}%)`,
-              `**RAM Livre:** ${formatarBytes(memoriaLivre)} (${(
-                100 - porcentagemMemoria
-              ).toFixed(2)}%)`,
-              `**Heap Usado:** ${formatarBytes(memoria.heapUsed)}`,
-              `**Heap Total:** ${formatarBytes(memoria.heapTotal)}`,
-              `**Heap Disponível:** ${formatarBytes(
-                memoria.heapTotal - memoria.heapUsed
-              )}`,
-              `**RSS (Resident Set Size):** ${formatarBytes(memoria.rss)}`,
-              `**Memória Externa:** ${formatarBytes(memoria.external)}`,
-              `**Array Buffers:** ${formatarBytes(memoria.arrayBuffers || 0)}`,
-              `**Buffer Cache:** ${formatarBytes(
-                os.totalmem() - os.freemem() - memoria.heapTotal
-              )}`,
+              "RAM Total: `" + formatarBytes(memoriaTotal) + "`",
+              "RAM Usada: `" +
+                formatarBytes(memoriaUsada) +
+                porcentagemMemoria +
+                "%`",
+              "RAM Livre: `" +
+                formatarBytes(memoriaLivre) +
+                (100 - porcentagemMemoria).toFixed(2) +
+                "%`",
+              "Heap Usado: `" + formatarBytes(memoria.heapUsed) + "`",
+              "Heap Total: `" + formatarBytes(memoria.heapTotal) + "`",
+              "Heap Disponível: `" +
+                formatarBytes(memoria.heapTotal - memoria.heapUsed) +
+                "`",
+              "RSS (Resident Set Size): `" + formatarBytes(memoria.rss) + "`",
+              "Memória Externa: `" + formatarBytes(memoria.external) + "`",
+              "Array Buffers: `" +
+                formatarBytes(memoria.arrayBuffers || 0) +
+                "`",
+              "Buffer Cache: `" +
+                formatarBytes(
+                  os.totalmem() - os.freemem() - memoria.heapTotal
+                ) +
+                "`",
             ].join("\n"),
             inline: false,
           },
           {
-            name: "🔄 Processamento",
+            name: `${obterEmoji("cpu")} Processamento`,
             value: [
-              `**Modelo CPU:** ${os.cpus()[0].model}`,
-              `**Número de núcleos:** ${cpuCount}`,
-              `**Arquitetura:** ${os.arch()}`,
-              `**Uso atual de CPU:** ${porcentagemCPU}%`,
-              `**Sistema:** ${os.platform()} ${os.release()}`,
+              "Modelo CPU: `" + os.cpus()[0].model + "`",
+              "Número de núcleos: `" + cpuCount + "`",
+              "Arquitetura: `" + os.arch() + "`",
+              "Uso atual de CPU: `" + porcentagemCPU + "%`",
+              "Sistema: `" + os.platform() + " " + os.release() + "`",
             ].join("\n"),
             inline: false,
           },
           {
-            name: "📈 Estatísticas Discord",
+            name: `${obterEmoji("connection")} Estatísticas Discord`,
             value: [
-              `**Servidores:** ${client.guilds.cache.size}`,
-              `**Canais:** ${client.channels.cache.size}`,
-              `**Canais de Texto:** ${
-                client.channels.cache.filter((c) => c.type === 0).size
-              }`,
-              `**Canais de Voz:** ${
-                client.channels.cache.filter((c) => c.type === 2).size
-              }`,
-              `**Categorias:** ${
-                client.channels.cache.filter((c) => c.type === 4).size
-              }`,
-              `**Usuários Totais:** ${client.users.cache.size}`,
-              `**Emojis:** ${client.emojis.cache.size}`,
+              "Servidores: `" + client.guilds.cache.size + "`",
+              "Canais: `" + client.channels.cache.size + "`",
+              "Canais de Texto: `" +
+                client.channels.cache.filter((c) => c.type === 0).size +
+                "`",
+              "Canais de Voz: `" +
+                client.channels.cache.filter((c) => c.type === 2).size +
+                "`",
+              "Categorias: `" +
+                client.channels.cache.filter((c) => c.type === 4).size +
+                "`",
+              "Usuários Totais: `" + client.users.cache.size + "`",
+              "Emojis: `" + client.emojis.cache.size + "`",
             ].join("\n"),
             inline: false,
           },
           {
-            name: "🎮 Funcionalidades Warbands",
+            name: `${obterEmoji("resume")} Status Warbands`,
             value: [
-              `**Mundos Armazenados:** ${mundos.length}`,
-              `**Mundos por Loc:**`,
-              `• DWF: ${mundos.filter((m) => m.loc === "dwf").length}`,
-              `• ELM: ${mundos.filter((m) => m.loc === "elm").length}`,
-              `• RDI: ${mundos.filter((m) => m.loc === "rdi").length}`,
-              `**Mundos Beamed:** ${
-                mundos.filter((m) => m.status === "BEAMED").length
-              }`,
-              `**Mundos com PKs:** ${mundos.filter((m) => m.hostil).length}`,
-              `**Mundos com Tempo:** ${
+              "Mundos Armazenados: `" + mundos.length + "`",
+              "Mundos por Localização:",
+              "• DWF: `" + mundos.filter((m) => m.loc === "dwf").length + "`",
+              "• ELM: `" + mundos.filter((m) => m.loc === "elm").length + "`",
+              "• RDI: `" + mundos.filter((m) => m.loc === "rdi").length + "`",
+              "Mundos Beamed: `" +
+                mundos.filter((m) => m.status === "BEAMED").length +
+                "`",
+              "Mundos com PKs: `" + mundos.filter((m) => m.hostil).length + "`",
+              "Mundos com Tempo: `" +
                 mundos.filter(
                   (m) => m.tempoRestante && m.tempoRestante.quantoFaltava
-                ).length
-              }`,
+                ).length +
+                "`",
             ].join("\n"),
             inline: false,
           },
         ],
         timestamp: new Date().toISOString(),
         footer: {
-          text: "Coded by Jota",
+          text: "👨‍💻 Coded by Jota",
         },
       }
 
