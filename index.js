@@ -76,35 +76,6 @@ const LOCALIZACOES = {
   idr: "rdi",
 }
 
-// Define termos para verificação de hostil e aliança
-const TERMOS_PK = ["pk", "pks", "pker", "pkers", "sapk", "pkfc"]
-const TERMOS_ALIANCA = [
-  "aliança",
-  "alianca",
-  "ally",
-  "aly",
-  "allied",
-  "aliado",
-  "aliada",
-  "wbu",
-  "kpk",
-]
-
-// Define termos para suprimentos
-const SUPRIMENTOS = {
-  CONSTRUCAO: [
-    "c",
-    "cons",
-    "construct",
-    "construction",
-    "construção",
-    "construcao",
-  ],
-  AGRICULTURA: ["f", "farm", "farming", "agricultura"],
-  HERBOLOGIA: ["h", "herb", "herblore", "herbologia"],
-  METALURGIA: ["s", "smith", "smithing", "metalurgia"],
-  MINERACAO: ["m", "mine", "mining", "mineração", "mineracao"],
-}
 // Cria uma única string que é um regex com todos os termos de loc possíveis
 const todasLocsValidas = Object.keys(LOCALIZACOES).join("|")
 
@@ -149,10 +120,48 @@ const todosStatus = Object.values(STATUS_TERMS)
   .map((term) => term.replace(/\s+/g, "\\s*"))
   .join("|")
 
+// Define termos para suprimentos
+const SUPRIMENTOS = {
+  CONSTRUCAO: [
+    "c",
+    "cons",
+    "construct",
+    "construction",
+    "construção",
+    "construcao",
+  ],
+  AGRICULTURA: ["f", "farm", "farming", "agricultura"],
+  HERBOLOGIA: ["h", "herb", "herblore", "herbologia"],
+  METALURGIA: ["s", "smith", "smithing", "metalurgia"],
+  MINERACAO: ["m", "mine", "mining", "mineração", "mineracao"],
+}
+
+// Define termos para verificação de hostililidade
+const TERMOS_PK = ["pk", "pks", "pker", "pkers", "sapk", "pkfc"]
+
+// Define termos para verificação de aliança
+const TERMOS_ALIANCA = [
+  "aliança",
+  "alianca",
+  "ally",
+  "aly",
+  "allied",
+  "aliado",
+  "aliada",
+  "wbu",
+  "kpk",
+]
+
+// Uma única string para o padrão de texto de tempo restante
+const padraoTempo =
+  // Padrão XX:XX
+  "(?:(\\d{1,2})\\s*:\\s*(\\d{2}))|" +
+  // Padrão XX min(s) XX s(eg/egs)
+  "(?:(\\d{1,2})\\s*(?:min|mins)?\\s*(?::|\\s+)(\\d{2})\\s*(?:s|seg|segs)?)"
+
 // Inicializa a array para armazenar os mundos capturados
 const mundos = []
 
-// Função para construir o regex dinâmico que aceita qualquer ordem dos grupos
 function construirRegexMundoInfo() {
   const grupoMundo = "(\\d{1,4})"
   const grupoLoc = `(${todasLocsValidas})`
@@ -160,10 +169,11 @@ function construirRegexMundoInfo() {
   const grupoHostil = `(${TERMOS_PK.join("|")})`
   const grupoAlianca = `(${TERMOS_ALIANCA.join("|")})`
   const grupoSuprimentos = "([cfhsm]+)"
+  const grupoTempo = `(${padraoTempo})`
 
   return new RegExp(
     "^\\s*" +
-      `(?:${grupoMundo}\\s*|${grupoLoc}\\s*|${grupoStatus}\\s*|${grupoHostil}\\s*|${grupoAlianca}\\s*|${grupoSuprimentos}\\s*)+` +
+      `(?:${grupoMundo}\\s*|${grupoLoc}\\s*|${grupoStatus}\\s*|${grupoHostil}\\s*|${grupoAlianca}\\s*|${grupoSuprimentos}\\s*|${grupoTempo}\\s*)+` +
       "\\s*$",
     "i"
   )
@@ -175,7 +185,7 @@ function sanitizarMensagem(mensagem) {
     return mensagem.content
       .trim()
       .toLowerCase()
-      .replace(/[^\w\s]/gi, "")
+      .replace(/[^\w\s:]/gi, "")
       .slice(0, 100)
   } catch (erro) {
     console.error(`❌ Erro ao sanitizar mensagem: ${erro.message}`)
@@ -228,6 +238,31 @@ const validadores = {
     return suprimentosEncontrados.size > 0
       ? Array.from(suprimentosEncontrados)
       : null
+  },
+
+  verificarTempoRestante: (texto) => {
+    const match = texto.match(new RegExp(padraoTempo))
+    if (!match) return null
+
+    // Pega o primeiro par de números encontrado (minutos e segundos)
+    const minutos = parseInt(match[1] || match[3])
+    const segundos = parseInt(match[2] || match[4])
+
+    // Valida os valores
+    if (
+      isNaN(minutos) ||
+      isNaN(segundos) ||
+      minutos < 0 ||
+      minutos > 99 ||
+      segundos < 0 ||
+      segundos > 59
+    ) {
+      return null
+    }
+    return {
+      minutos,
+      segundos,
+    }
   },
 }
 
@@ -419,6 +454,18 @@ function processarMensagem(textoMensagem) {
   resultado.alianca = validadores.verificarAlianca(textoMensagem)
   resultado.suprimentos = validadores.verificarSuprimentos(textoMensagem)
 
+  // Extrai informação de tempo restante utilizando validador
+  const tempoRestante = validadores.verificarTempoRestante(textoMensagem)
+  if (tempoRestante) {
+    resultado.tempoRestante = {
+      queHorasEram: new Date(),
+      quantoFaltava: {
+        minutos: tempoRestante.minutos,
+        segundos: tempoRestante.segundos,
+      },
+    }
+  }
+
   // Extrai o número do mundo
   const mundoMatch = textoMensagem.match(/\d{1,3}/)
   if (mundoMatch) {
@@ -427,6 +474,7 @@ function processarMensagem(textoMensagem) {
 
   return resultado
 }
+
 client.once("ready", async () => {
   try {
     console.log(`✅ Bot online como ${client.user.tag}`)
@@ -503,6 +551,8 @@ client.on("messageCreate", async (mensagem) => {
             alianca: resultado.alianca || mundoExistente.alianca,
             reportadoPor: [...(mundoExistente.reportadoPor || []), reportador],
             reportadoEm: [...(mundoExistente.reportadoEm || []), servidor],
+            tempoRestante:
+              resultado.tempoRestante || mundoExistente.tempoRestante,
             ultimaAtualizacao: agora,
           }
           console.log(
@@ -514,7 +564,7 @@ client.on("messageCreate", async (mensagem) => {
             loc: resultado.loc,
             status: resultado.status,
             suprimentos: resultado.suprimentos,
-            tempoRestante: {
+            tempoRestante: resultado.tempoRestante || {
               queHorasEram: null,
               quantoFaltava: null,
             },
