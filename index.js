@@ -41,6 +41,11 @@ const cmdTable = new SlashCommandBuilder()
     "Exibe um quadro com as informações dos mundos reportados em formato de tabela"
   )
 
+// Adicione o comando /Timelist ao registro de comandos
+const cmdTimelist = new SlashCommandBuilder()
+  .setName("timelist")
+  .setDescription("Exibe uma lista dos mundos com tempo restante conhecido")
+
 // Lista de mundos (servidores) válidos do RuneScape
 const mundosValidos = [
   1, 2, 4, 5, 6, 9, 10, 12, 14, 15, 16, 18, 21, 22, 23, 24, 25, 26, 27, 28, 30,
@@ -430,6 +435,170 @@ function gerarTabela() {
   return table(dados, config)
 }
 
+// Função auxiliar para calcular o tempo restante (comando /Timelist)
+function calcularTempoRestante(tempoRestante) {
+  if (
+    !tempoRestante ||
+    !tempoRestante.quantoFaltava ||
+    !tempoRestante.queHorasEram
+  ) {
+    return null
+  }
+
+  const agora = new Date()
+  const queHorasEram = new Date(tempoRestante.queHorasEram)
+
+  // Calcula a diferença em milissegundos e converte para segundos
+  const diferencaSegundos = Math.floor((agora - queHorasEram) / 1000)
+
+  // Converte minutos e segundos reportados em total de segundos
+  const tempoInicialSegundos =
+    tempoRestante.quantoFaltava.minutos * 60 +
+    tempoRestante.quantoFaltava.segundos
+
+  // Subtrai o tempo decorrido
+  const tempoRestanteSegundos = tempoInicialSegundos - diferencaSegundos
+
+  // Retorna em minutos e segundos ou null se já expirou
+  return tempoRestanteSegundos > 0
+    ? {
+        minutos: Math.floor(tempoRestanteSegundos / 60),
+        segundos: tempoRestanteSegundos % 60,
+      }
+    : null
+}
+
+// Função para gerar a tabela
+function gerarTabelaTimelist(mundos) {
+  // Padrão de formatação
+  const config = {
+    border: {
+      topBody: `─`,
+      topJoin: `┬`,
+      topLeft: `┌`,
+      topRight: `┐`,
+      bottomBody: `─`,
+      bottomJoin: `┴`,
+      bottomLeft: `└`,
+      bottomRight: `┘`,
+      bodyLeft: `│`,
+      bodyRight: `│`,
+      bodyJoin: `│`,
+      joinBody: `─`,
+      joinLeft: `├`,
+      joinRight: `┤`,
+      joinJoin: `┼`,
+    },
+    columns: {
+      0: {
+        alignment: "center",
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      1: {
+        alignment: "center",
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      2: {
+        alignment: "center",
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      3: {
+        alignment: "center",
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      4: {
+        alignment: "center",
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      5: {
+        alignment: "center",
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      6: {
+        alignment: "center",
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+    },
+    drawHorizontalLine: () => true,
+  }
+
+  // Filtra mundos que têm tempo restante conhecido
+  const mundosComTempo = mundos
+    .map((mundo) => {
+      const tempoCalculado = calcularTempoRestante(mundo.tempoRestante)
+      return {
+        ...mundo,
+        tempoCalculado,
+      }
+    })
+    .filter((mundo) => mundo.tempoCalculado !== null)
+
+  // Ordena os mundos pelo maior tempo restante
+  mundosComTempo.sort((a, b) => {
+    const aTempoTotal =
+      a.tempoCalculado.minutos * 60 + a.tempoCalculado.segundos
+    const bTempoTotal =
+      b.tempoCalculado.minutos * 60 + b.tempoCalculado.segundos
+    return bTempoTotal - aTempoTotal
+  })
+
+  // Limita a lista a no máximo 10 mundos
+  const mundosLimitados = mundosComTempo.slice(0, 10)
+
+  // Cria as linhas da tabela
+  const linhasTabela = [
+    [
+      "Tempo Restante",
+      "Mundo",
+      "Loc",
+      "Status",
+      "Suprimentos",
+      "PK?",
+      "Aliança?",
+    ],
+    ...mundosLimitados.map((mundo) => [
+      `${mundo.tempoCalculado.minutos}:${String(
+        mundo.tempoCalculado.segundos
+      ).padStart(2, "0")}`,
+      mundo.mundo,
+      mundo.loc.toUpperCase(),
+      mundo.status,
+      Array.isArray(mundo.suprimentos)
+        ? mundo.suprimentos
+            .map((s) => {
+              switch (s) {
+                case "CONSTRUCAO":
+                  return "C"
+                case "AGRICULTURA":
+                  return "F"
+                case "HERBOLOGIA":
+                  return "H"
+                case "MINERACAO":
+                  return "M"
+                case "METALURGIA":
+                  return "S"
+                default:
+                  return "?"
+              }
+            })
+            .sort()
+            .join(", ")
+        : "-",
+      mundo.hostil ? "Sim" : "Não",
+      mundo.alianca ? "Sim" : "Não",
+    ]),
+  ]
+
+  return table(linhasTabela, config)
+}
+
 // Função para processar a mensagem e extrair informações
 function processarMensagem(textoMensagem) {
   const regex = construirRegexMundoInfo()
@@ -478,8 +647,8 @@ function processarMensagem(textoMensagem) {
 client.once("ready", async () => {
   try {
     console.log(`✅ Bot online como ${client.user.tag}`)
-    await client.application.commands.set([cmdList, cmdTable])
-    console.log("✅ Comandos /list e /table registrados com sucesso")
+    await client.application.commands.set([cmdList, cmdTable, cmdTimelist])
+    console.log("✅ Comandos /list, /table e /timelist registrados com sucesso")
   } catch (erro) {
     console.error(`❌ Erro ao registrar comandos slash: ${erro.message}`)
   }
@@ -638,24 +807,48 @@ client.on("interactionCreate", async (interaction) => {
       })
     }
   }
-
-  if (!canaisWarbands.includes(interaction.channelId)) {
-    await interaction.reply({
-      content: "❌ Este comando só pode ser usado nos canais de Warbands!",
-      ephemeral: true,
-    })
-    return
-  } else {
-    try {
-      const tabela = gerarTabela()
-
-      // Envia um bloco de código com a tabela
-      const resposta = "```" + tabela + "```"
-      await interaction.reply(resposta)
-    } catch (erro) {
-      console.error(`❌ Erro ao gerar a tabela: ${erro.message}`)
+  if (interaction.commandName === "table") {
+    if (!canaisWarbands.includes(interaction.channelId)) {
       await interaction.reply({
-        content: "❌ Ocorreu um erro ao gerar a tabela!",
+        content: "❌ Este comando só pode ser usado nos canais de Warbands!",
+        ephemeral: true,
+      })
+      return
+    } else {
+      try {
+        const tabela = gerarTabela()
+
+        // Envia um bloco de código com a tabela
+        const resposta = "```" + tabela + "```"
+        await interaction.reply(resposta)
+      } catch (erro) {
+        console.error(`❌ Erro ao gerar a tabela: ${erro.message}`)
+        await interaction.reply({
+          content: "❌ Ocorreu um erro ao gerar a tabela!",
+          ephemeral: true,
+        })
+      }
+    }
+  }
+  if (interaction.commandName === "timelist") {
+    if (!canaisWarbands.includes(interaction.channelId)) {
+      await interaction.reply({
+        content: "❌ Este comando só pode ser usado nos canais de Warbands!",
+        ephemeral: true,
+      })
+      return
+    }
+
+    try {
+      // Gera a tabela com os mundos reportados
+      const tabelaTimelist = gerarTabelaTimelist(mundos)
+
+      // Envia a tabela no canal onde o comando foi utilizado
+      await interaction.reply(`\`\`\`${tabelaTimelist}\`\`\``)
+    } catch (erro) {
+      console.error(`❌ Erro ao executar /Timelist: ${erro.message}`)
+      await interaction.reply({
+        content: "❌ Ocorreu um erro ao gerar a lista de tempos!",
         ephemeral: true,
       })
     }
