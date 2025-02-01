@@ -3,6 +3,9 @@ import dotenv from "dotenv"
 import { table } from "table"
 import { memoryUsage, cpuUsage } from "process"
 import os from "os"
+import { createRequire } from "module"
+const require = createRequire(import.meta.url)
+const emojis = require("./emojis.json")
 
 dotenv.config()
 
@@ -30,6 +33,28 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 })
+
+// Função auxiliar para obter string de emoji personalizado do bot (emojis.json)
+function obterEmoji(nomeEmoji) {
+  try {
+    // Verifica se o emoji existe na categoria estático
+    if (emojis.estatico && emojis.estatico[nomeEmoji]) {
+      return `<:${nomeEmoji}:${emojis.estatico[nomeEmoji]}>`
+    }
+
+    // Verifica se o emoji existe na categoria animado
+    if (emojis.animado && emojis.animado[nomeEmoji]) {
+      return `<a:${nomeEmoji}:${emojis.animado[nomeEmoji]}>`
+    }
+
+    // Retorna vazio se não encontrar o emoji
+    console.error(`❌ O emoji personalizado de nome ${nomeEmoji} não existe`)
+    return ""
+  } catch (erro) {
+    console.error(`❌ Erro ao obter emoji ${nomeEmoji}: ${erro.message}`)
+    return ""
+  }
+}
 
 // Registra o comando slash "list"
 const cmdList = new SlashCommandBuilder()
@@ -317,7 +342,7 @@ function formatarMundo(mundo) {
   }
 
   if (mundo.hostil) {
-    textoFormatado += "`☠️`"
+    textoFormatado += obterEmoji("skull")
   }
 
   return textoFormatado
