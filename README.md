@@ -113,6 +113,8 @@ Este projeto foi desenvolvido utilizando:
 - **Comando /table:** exibição de um quadro dos mundos informados organizados por suprimentos
 - **Feedback via reações:** o bot reage com emojis às mensagens enviadas pelos jogadores para um feedback visual rápido e organizado
 - **Restrição a canais de Warbands:** as funcionalidades do bot funcionam apenas em canais especificados no .env
+- **Captura e armazenamento do tempo:** mecânica para detectar, tratar e armazenar o tempo restante para os mundos (servidores)
+- **Comando para checar tempos:** exibir aos jogadores o tempo restante em cada um dos mundos que tiveram os tempos informados
 
 **🟡 Em desenvolvimento:**
 
@@ -123,8 +125,6 @@ Este projeto foi desenvolvido utilizando:
 - **Node-Cron core:** implementar eventos node-cron para orientar o funcionamento do bot (o minigame se repete a cada 7 horas)
 - **Resetar a lista de mundos automaticamente:** a lista de mundos reportados é resetada automaticamente sempre 5 minutos antes de uma nova wave
 - **Dropdown de suprimentos para o /list:** menu dropdown inserido na resposta do /list que permite com que os jogadores selecionem quais suprimentos desejam
-- **Captura e armazenamento do tempo:** mecânica para detectar, tratar e armazenar o tempo restante para os mundos (servidores)
-- **Comando para checar tempos:** exibir aos jogadores o tempo restante em cada um dos mundos que tiveram os tempos informados
 - **Cair automaticamente com o tempo:** mundos que excederem o tempo restante informado têm o status modificado automaticamente para caído
 - **Estruturar a captura, tratamento e armazenamento de dados de jogadores:** preparar o terreno para começar a contabilizar estatísticas dos jogadores
 - **Registrar todos os participantes:** registrar todos os jogadores (Discord ID) que estiveram presentes no canal de voz da wb durante o evento
