@@ -115,6 +115,7 @@ Este projeto foi desenvolvido utilizando:
 - **Restrição a canais de Warbands:** as funcionalidades do bot funcionam apenas em canais especificados no .env
 - **Captura e armazenamento do tempo:** mecânica para detectar, tratar e armazenar o tempo restante para os mundos (servidores)
 - **Comando para checar tempos:** exibir aos jogadores o tempo restante em cada um dos mundos que tiveram os tempos informados
+- **Uso facilitado de emojis personalizados:** função JavaScript auxiliar para o uso facilitado de emojis customizados do bot através de leitura de arquivo JSON
 
 **🟡 Em desenvolvimento:**
 
