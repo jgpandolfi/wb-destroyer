@@ -864,7 +864,10 @@ client.on("interactionCreate", async (interaction) => {
       const listasFormatadas = Object.entries(mundosPorLoc).map(
         ([loc, mundosLoc]) => {
           const mundosOrdenados = ordenarMundos(mundosLoc)
-          const mundosFormatados = mundosOrdenados.map(formatarMundo).join(", ")
+          const mundosFormatados =
+            mundosOrdenados.length > 0
+              ? mundosOrdenados.map(formatarMundo).join(", ")
+              : "Nenhum mundo informado..."
           return `**${loc.toUpperCase()}**: ${mundosFormatados}`
         }
       )
