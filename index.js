@@ -1,4 +1,11 @@
-import { Client, GatewayIntentBits, SlashCommandBuilder } from "discord.js"
+import {
+  Client,
+  GatewayIntentBits,
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+} from "discord.js"
 import dotenv from "dotenv"
 import { table } from "table"
 import { memoryUsage, cpuUsage } from "process"
@@ -636,6 +643,14 @@ function gerarTabelaTimelist(mundos) {
   return table(linhasTabela, config)
 }
 
+// Função auxiliar para filtrar mundos por suprimento
+function filtrarMundosPorSuprimento(mundos, suprimento) {
+  if (!suprimento || suprimento === "TODOS") return mundos
+  return mundos.filter(
+    (m) => Array.isArray(m.suprimentos) && m.suprimentos.includes(suprimento)
+  )
+}
+
 // Função para processar a mensagem e extrair informações
 function processarMensagem(textoMensagem) {
   const regex = construirRegexMundoInfo()
@@ -855,24 +870,155 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     try {
-      const mundosPorLoc = {
-        dwf: mundos.filter((m) => m.loc === "dwf"),
-        elm: mundos.filter((m) => m.loc === "elm"),
-        rdi: mundos.filter((m) => m.loc === "rdi"),
+      // Cria o select menu
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId("filtroSuprimentos")
+        .setPlaceholder("Filtrar mundos por suprimentos")
+        .addOptions(
+          new StringSelectMenuOptionBuilder()
+            .setLabel("Todos os mundos (qualquer suprimento)")
+            .setDescription(
+              "Mostrar todos os mundos reportados independentemente do suprimento"
+            )
+            .setValue("TODOS")
+            .setDefault(true),
+          new StringSelectMenuOptionBuilder()
+            .setLabel("Apenas Construção")
+            .setDescription(
+              "Mostrar apenas mundos com suprimentos de Construção"
+            )
+            .setValue("CONSTRUCAO"),
+          new StringSelectMenuOptionBuilder()
+            .setLabel("Apenas Agricultura")
+            .setDescription(
+              "Mostrar apenas mundos com suprimentos de Agricultura"
+            )
+            .setValue("AGRICULTURA"),
+          new StringSelectMenuOptionBuilder()
+            .setLabel("Apenas Herbologia")
+            .setDescription(
+              "Mostrar apenas mundos com suprimentos de Herbologia"
+            )
+            .setValue("HERBOLOGIA"),
+          new StringSelectMenuOptionBuilder()
+            .setLabel("Apenas Mineração")
+            .setDescription(
+              "Mostrar apenas mundos com suprimentos de Mineração"
+            )
+            .setValue("MINERACAO"),
+          new StringSelectMenuOptionBuilder()
+            .setLabel("Apenas Metalurgia")
+            .setDescription(
+              "Mostrar apenas mundos com suprimentos de Metalurgia"
+            )
+            .setValue("METALURGIA")
+        )
+
+      const row = new ActionRowBuilder().addComponents(selectMenu)
+
+      // Função para gerar a lista formatada
+      function gerarListaFormatada(filtroSuprimento = "TODOS") {
+        // Mapeamento dos tipos de suprimentos para nomes amigáveis
+        const nomeSuprimentos = {
+          CONSTRUCAO: "Construção",
+          AGRICULTURA: "Agricultura",
+          HERBOLOGIA: "Herbologia",
+          MINERACAO: "Mineração",
+          METALURGIA: "Metalurgia",
+        }
+
+        const mundosFiltrados = {
+          dwf: filtrarMundosPorSuprimento(
+            mundos.filter((m) => m.loc === "dwf"),
+            filtroSuprimento
+          ),
+          elm: filtrarMundosPorSuprimento(
+            mundos.filter((m) => m.loc === "elm"),
+            filtroSuprimento
+          ),
+          rdi: filtrarMundosPorSuprimento(
+            mundos.filter((m) => m.loc === "rdi"),
+            filtroSuprimento
+          ),
+        }
+
+        const listaFormatada = Object.entries(mundosFiltrados)
+          .map(([loc, mundosLoc]) => {
+            const mundosOrdenados = ordenarMundos(mundosLoc)
+            const mundosFormatados =
+              mundosOrdenados.length > 0
+                ? mundosOrdenados.map(formatarMundo).join(", ")
+                : "Nenhum mundo informado..."
+            return `**${loc.toUpperCase()}**: ${mundosFormatados}`
+          })
+          .join("\n")
+
+        // Selecionar qual emoji cpersonalizado deve ser usado
+        let nomeEmoji
+
+        switch (filtroSuprimento) {
+          case "CONSTRUCAO":
+            nomeEmoji = "construction"
+            break
+          case "AGRICULTURA":
+            nomeEmoji = "farming"
+            break
+          case "HERBOLOGIA":
+            nomeEmoji = "herblore"
+            break
+          case "MINERACAO":
+            nomeEmoji = "mining"
+            break
+          case "METALURGIA":
+            nomeEmoji = "smithing"
+            break
+          default:
+            nomeEmoji = null
+            break
+        }
+
+        // Adiciona o texto informativo apenas se houver um filtro específico
+        return filtroSuprimento !== "TODOS"
+          ? `${obterEmoji(
+              nomeEmoji
+            )} Exibindo apenas mundos com suprimentos de **${
+              nomeSuprimentos[filtroSuprimento]
+            }**:\n${listaFormatada}`
+          : listaFormatada
       }
 
-      const listasFormatadas = Object.entries(mundosPorLoc).map(
-        ([loc, mundosLoc]) => {
-          const mundosOrdenados = ordenarMundos(mundosLoc)
-          const mundosFormatados =
-            mundosOrdenados.length > 0
-              ? mundosOrdenados.map(formatarMundo).join(", ")
-              : "Nenhum mundo informado..."
-          return `**${loc.toUpperCase()}**: ${mundosFormatados}`
-        }
-      )
+      // Enviar mensagem inicial
+      await interaction.reply({
+        content: gerarListaFormatada(),
+        components: [row],
+      })
 
-      await interaction.reply(listasFormatadas.join("\n"))
+      // Obtém a mensagem de resposta para criar o coletor de componentes
+      const mensagemInicial = await interaction.fetchReply()
+
+      // Cria coletor para o select menu com tempo de 2 minutos
+      const collector = mensagemInicial.createMessageComponentCollector({
+        time: 120000,
+      })
+
+      // Quando o usuário interagir com o select menu...
+      collector.on("collect", async (i) => {
+        if (i.customId === "filtroSuprimentos") {
+          // Atualiza a mensagem com a lista filtrada conforme o valor escolhido.
+          await i.update({
+            content: gerarListaFormatada(i.values[0]),
+            components: [row],
+          })
+        }
+      })
+
+      // Ao encerrar o coletor, desabilite o menu para evitar interações futuras
+      collector.on("end", async () => {
+        selectMenu.setDisabled(true)
+        await mensagemInicial.edit({
+          components: [new ActionRowBuilder().addComponents(selectMenu)],
+        })
+      })
     } catch (erro) {
       console.error(`❌ Erro ao listar mundos: ${erro.message}`)
       await interaction.reply({
