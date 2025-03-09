@@ -118,6 +118,8 @@ Este projeto foi desenvolvido utilizando:
 - **Uso facilitado de emojis personalizados:** função JavaScript auxiliar para o uso facilitado de emojis customizados do bot através de leitura de arquivo JSON
 - **Dropdown de suprimentos para o /list:** menu dropdown (select menu) inserido na resposta do comando /list que permite com que os jogadores selecionem mundos com quais suprimentos desejam
 - **Cair automaticamente com o tempo:** mundos que excederem o tempo restante informado têm o status modificado automaticamente para caído
+- **Node-Cron core:** implementar eventos node-cron para orientar o funcionamento do bot (o minigame se repete a cada 7 horas)
+- **Resetar a lista de mundos automaticamente:** a lista de mundos reportados é resetada automaticamente sempre 5 minutos antes de uma nova wave
 
 **🟡 Em desenvolvimento:**
 
@@ -125,8 +127,6 @@ Este projeto foi desenvolvido utilizando:
 
 **🔴 Não iniciado:**
 
-- **Node-Cron core:** implementar eventos node-cron para orientar o funcionamento do bot (o minigame se repete a cada 7 horas)
-- **Resetar a lista de mundos automaticamente:** a lista de mundos reportados é resetada automaticamente sempre 5 minutos antes de uma nova wave
 - **Estruturar a captura, tratamento e armazenamento de dados de jogadores:** preparar o terreno para começar a contabilizar estatísticas dos jogadores
 - **Registrar todos os participantes:** registrar todos os jogadores (Discord ID) que estiveram presentes no canal de voz da wb durante o evento
 - **Registrar reportes do jogador:** contabilizar estatísticas de dados enviados pelos jogadores
