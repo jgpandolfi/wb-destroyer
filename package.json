@@ -26,6 +26,7 @@
   "dependencies": {
     "discord.js": "^14.17.3",
     "dotenv": "^16.4.7",
+    "node-cron": "^3.0.3",
     "table": "^6.9.0"
   }
 }

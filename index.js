@@ -7,11 +7,13 @@ import {
   StringSelectMenuOptionBuilder,
 } from "discord.js"
 import dotenv from "dotenv"
+import cron from "node-cron"
 import { table } from "table"
 import { memoryUsage, cpuUsage } from "process"
 import os from "os"
 import { createRequire } from "module"
 const require = createRequire(import.meta.url)
+const horariosWarbands = require("./horarios.json")
 const emojis = require("./emojis.json")
 
 dotenv.config()
@@ -40,6 +42,52 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 })
+
+// Função auxiliar para calcular os horários de Warbands com adiantamento de 15 minutos (para node-cron)
+function calcularHorariosComAdiantamento() {
+  const horariosComAdiantamento = {}
+
+  for (const [dia, horarios] of Object.entries(horariosWarbands)) {
+    horariosComAdiantamento[dia] = horarios.map((horario) => {
+      const [hora, minuto] = horario.split(":").map(Number)
+
+      // Subtrair 15 minutos
+      let novoMinuto = minuto - 15
+      let novaHora = hora
+
+      if (novoMinuto < 0) {
+        novoMinuto += 60
+        novaHora -= 1
+      }
+
+      // Ajustar se a nova hora for negativa (caso seja antes da meia-noite)
+      if (novaHora < 0) {
+        novaHora = 23
+      }
+
+      return `${String(novaHora).padStart(2, "0")}:${String(
+        novoMinuto
+      ).padStart(2, "0")}`
+    })
+  }
+
+  return horariosComAdiantamento
+}
+
+// Função auxiliar para substituir o nome dos dias da semana por números (node-cron)
+function diaToCron(dia) {
+  const mapaDias = {
+    domingo: 0,
+    segunda: 1,
+    terça: 2,
+    quarta: 3,
+    quinta: 4,
+    sexta: 5,
+    sábado: 6,
+  }
+
+  return mapaDias[dia]
+}
 
 // Função auxiliar para obter string de emoji personalizado do bot (emojis.json)
 function obterEmoji(nomeEmoji) {
@@ -479,6 +527,79 @@ function gerarTabela() {
   return table(dados, config)
 }
 
+// Função auxiliar do Ciclo de Ações de Warbands (vinculada ao node-cron)
+async function executarCicloWarbands(horarioWarbands) {
+  try {
+    // AÇÃO 1 (15 minutos antes) - Enviar alerta em canais configurados
+    const canaisAlerta = process.env.CANAIS_ALERTA_WARBANDS.split(",").map(
+      (id) => id.trim()
+    )
+    for (const canalId of canaisAlerta) {
+      const canalTexto = await client.channels.fetch(canalId)
+      await canalTexto.send("**WB EM 15 MINUTOS!**")
+      console.log("🔔 Mensagem de alerta de Warbands em 15 minutos enviada")
+    }
+
+    // Força uma espera até faltarem exatamente 5 minutos
+    await new Promise((resolve) => setTimeout(resolve, 10 * 60 * 1000))
+
+    // AÇÃO 2 - Limpar lista de mundos
+    mundos.length = []
+    console.log("✅ Lista de mundos resetada")
+
+    // AÇÃO 3 - Mover usuários entre canais de voz
+    const canalOrigemId = process.env.CANAL_VOZ_PRE_WARBANDS.trim()
+    const canalDestinoId = process.env.CANAL_VOZ_WARBANDS.trim()
+
+    const canalOrigem = await client.channels.fetch(canalOrigemId)
+    if (canalOrigem.members.size > 0) {
+      canalOrigem.members.forEach(async (membro) => {
+        await membro.voice.setChannel(canalDestinoId).catch(console.error)
+      })
+      console.log(
+        "✅ Usuários movidos do Canal de Voz da Pré-WB para o Canal de Voz da Warbands"
+      )
+    }
+
+    // Força uma espera até faltarem exatamente 4 minutos
+    await new Promise((resolve) => setTimeout(resolve, 1 * 60 * 1000))
+
+    // AÇÃO 4 - Enviar mensagem detalhada no canal de Warbands
+    const canalWarbandsId = process.env.CANAIS_WARBANDS.trim()
+    const canalWarbands = await client.channels.fetch(canalWarbandsId)
+
+    const horarioFormatadoUTC = horarioWarbands
+    const dataFormatadaUTC = new Date().toISOString().split("T")[0]
+
+    await canalWarbands.send(
+      `\`\`\`
+══════════ WARBANDS ${horarioFormatadoUTC} ${dataFormatadaUTC} ══════════\`\`\`
+**Últimos lembretes:**\n` +
+        `:small_orange_diamond: Desative seu privado\n` +
+        `:small_orange_diamond: Saia dos canais de bate-papo do clã e do clã visitante\n` +
+        `:small_orange_diamond: Saia de grupo de boss/recife\n` +
+        `:small_orange_diamond: Certifique-se de estar no FC indicado\n` +
+        `:small_orange_diamond: Vista o set adequado completo\n` +
+        `:small_orange_diamond: Esteja com um familiar de cargas adequado\n` +
+        `:small_orange_diamond: Desative seu autorretaliar\n` +
+        `:small_orange_diamond: Confira se seus pontos de oração estão carregados\n` +
+        `:small_orange_diamond: Sempre que trocar de mundo confira se sua oração Protect Item está ativa\n\n` +
+        `Dicas extras:\n` +
+        `:small_orange_diamond: As piscinas de Oo'glog dão ótimos benefícios...\n` +
+        `:small_orange_diamond:A aura Aegis ajuda muito...\n\n` +
+        `ENVIE A LOC DO SEU MUNDO AQUI NESTA SALA!\`\`\``
+    )
+
+    console.log(
+      "✅ Mensagem com os últimos lembretes enviada no canal ded texto da Warbands"
+    )
+  } catch (erro) {
+    console.error(
+      `❌ Erro ao executar ciclo automático da Warbands! ${erro.message}`
+    )
+  }
+}
+
 // Função auxiliar para calcular o tempo restante (comando /Timelist)
 function calcularTempoRestante(tempoRestante) {
   if (
@@ -756,13 +877,33 @@ client.once("ready", async () => {
     ])
     console.log("✅ Comandos slash registrados com sucesso")
 
+    // Criar eventos node-cron com os horários de Warbands (adiantados em 15 minutos)
+    const horariosComAdiantamento = calcularHorariosComAdiantamento()
+
+    for (const [dia, horarios] of Object.entries(horariosComAdiantamento)) {
+      horarios.forEach((horario) => {
+        const [hora, minuto] = horario.split(":")
+        const cronExpression = `${minuto} ${hora} * * ${diaToCron(dia)}`
+
+        cron.schedule(cronExpression, async () => {
+          console.log(
+            `🔔 Ciclo automático iniciado para Warbands às ${hora}:${minuto} UTC`
+          )
+
+          await executarCicloWarbands(horario)
+        })
+      })
+    }
+
+    console.log("✅ Jobs cron configurados com sucesso")
+
     // Intervalo para chamar automaticamente função de verificar mundos que caíram
     setInterval(verificarMundosQueCairam, 15 * 1000)
     console.log(
       "✅ Intervalo setado para checagem automática de mundos que caíram por tempo"
     )
   } catch (erro) {
-    console.error(`❌ Erro ao registrar comandos slash: ${erro.message}`)
+    console.error(`❌ Erro na inicialização do bot: ${erro.message}`)
   }
 })
 
