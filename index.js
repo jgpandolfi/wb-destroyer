@@ -512,6 +512,31 @@ function calcularTempoRestante(tempoRestante) {
     : null
 }
 
+// Função auxiliar para alterar o status do mundo automaticamente caso ele "caia"
+function verificarMundosQueCairam() {
+  const agora = new Date()
+
+  mundos.forEach((mundo) => {
+    if (
+      mundo.tempoRestante &&
+      mundo.tempoRestante.quantoFaltava &&
+      mundo.status !== "CAIDO"
+    ) {
+      const tempoCalculado = calcularTempoRestante(mundo.tempoRestante)
+
+      if (!tempoCalculado) {
+        mundo.status = "CAIDO"
+        mundo.tempoRestante = null
+        mundo.ultimaAtualizacao = agora
+
+        console.log(
+          `⏰ Status do mundo ${mundo.mundo} alterado automaticamente para CAÍDO (tempo expirado)`
+        )
+      }
+    }
+  })
+}
+
 // Função para gerar a tabela
 function gerarTabelaTimelist(mundos) {
   // Padrão de formatação
@@ -730,6 +755,12 @@ client.once("ready", async () => {
       cmdBotstatus,
     ])
     console.log("✅ Comandos slash registrados com sucesso")
+
+    // Intervalo para chamar automaticamente função de verificar mundos que caíram
+    setInterval(verificarMundosQueCairam, 15 * 1000)
+    console.log(
+      "✅ Intervalo setado para checagem automática de mundos que caíram por tempo"
+    )
   } catch (erro) {
     console.error(`❌ Erro ao registrar comandos slash: ${erro.message}`)
   }
@@ -851,6 +882,11 @@ client.on("messageCreate", async (mensagem) => {
           return
         }
         await mensagem.react(obterEmoji("certo"))
+
+        // Verifica se foi informado tempo restante na mensagem (reação emoji de relógio)
+        if (resultado.tempoRestante) {
+          await mensagem.react(obterEmoji("relogio2"))
+        }
       }
     }
   } catch (erro) {
