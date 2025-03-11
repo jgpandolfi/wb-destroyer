@@ -24,6 +24,7 @@
   "license": "MIT",
   "description": "Bot para Discord que auxilia jogadores de RuneScape 3 a participarem do minigame Wilderness Warbands",
   "dependencies": {
+    "better-sqlite3": "^11.8.1",
     "discord.js": "^14.17.3",
     "dotenv": "^16.4.7",
     "node-cron": "^3.0.3",

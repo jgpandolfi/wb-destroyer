@@ -8,6 +8,7 @@ import {
 } from "discord.js"
 import dotenv from "dotenv"
 import cron from "node-cron"
+import Database from "better-sqlite3"
 import { table } from "table"
 import { memoryUsage, cpuUsage } from "process"
 import os from "os"
@@ -79,15 +80,41 @@ function diaToCron(dia) {
   const mapaDias = {
     domingo: 0,
     segunda: 1,
-    terça: 2,
+    terca: 2,
     quarta: 3,
     quinta: 4,
     sexta: 5,
-    sábado: 6,
+    sabado: 6,
   }
 
   return mapaDias[dia]
 }
+
+// Inicializa o banco de dados SQLite (para armazenar dados dos jogadores)
+const db = new Database("bancoDeDados.db", { verbose: console.log })
+
+// Criação da tabela 'jogadores' com todas as colunas solicitadas
+db.exec(`
+  CREATE TABLE IF NOT EXISTS jogadores (
+    discord_id TEXT PRIMARY KEY,
+    discord_username TEXT,
+    rsn_atual TEXT,
+    historico_rsns TEXT DEFAULT '[]',
+    clan_atual TEXT,
+    historico_clans TEXT DEFAULT '[]',
+    alts TEXT DEFAULT '[]',
+    total_warbands INTEGER DEFAULT 0,
+    datas_warbands TEXT DEFAULT '[]',
+    tempo_warbands INTEGER DEFAULT 0,
+    mundos_reportados INTEGER DEFAULT 0,
+    suprimentos_reportados TEXT DEFAULT '{}',
+    advertencias INTEGER DEFAULT 0,
+    datas_advertencias TEXT DEFAULT '[]',
+    suspensoes INTEGER DEFAULT 0,
+    datas_suspensoes TEXT DEFAULT '[]',
+    observacoes TEXT DEFAULT ''
+  );
+`)
 
 // Função auxiliar para obter string de emoji personalizado do bot (emojis.json)
 function obterEmoji(nomeEmoji) {
@@ -137,6 +164,37 @@ const cmdPing = new SlashCommandBuilder()
 const cmdBotstatus = new SlashCommandBuilder()
   .setName("botstatus")
   .setDescription("🤖 Exibe informações detalhadas sobre o status do bot")
+
+// Registra o comando SetRSN usado por administradores para salvar o RSN dos jogadores slash
+const cmdSetRSN = new SlashCommandBuilder()
+  .setName("setrsn")
+  .setDescription("Define o RSN (RuneScape Name) de um jogador")
+  .addUserOption((option) =>
+    option
+      .setName("jogador")
+      .setDescription("O jogador para definir o RSN")
+      .setRequired(true)
+  )
+  .addStringOption((option) =>
+    option
+      .setName("rsn")
+      .setDescription("O RSN (RuneScape Name) do jogador")
+      .setRequired(true)
+  )
+
+// Registra o comando Set Clan usado por administrador para salvar o clã de um jogador
+const cmdSetClan = new SlashCommandBuilder()
+  .setName("setclan")
+  .setDescription("Define o clã de um jogador")
+  .addUserOption((option) =>
+    option
+      .setName("jogador")
+      .setDescription("O jogador para definir o clã")
+      .setRequired(true)
+  )
+  .addStringOption((option) =>
+    option.setName("clan").setDescription("O clã do jogador").setRequired(true)
+  )
 
 // Lista de mundos (servidores) válidos do RuneScape
 const mundosValidos = [
@@ -561,6 +619,22 @@ async function executarCicloWarbands(horarioWarbands) {
       )
     }
 
+    // Registra a participação dos jogadores que estão no canal de voz
+    const canalVozWarbands = await client.channels.fetch(canalDestinoId)
+    if (canalVozWarbands.members && canalVozWarbands.members.size > 0) {
+      canalVozWarbands.members.forEach((membro) => {
+        // Registra o jogador no banco (se ainda não estiver registrado)
+        registrarJogador(membro.user.id, membro.user.username)
+
+        // Atualiza a participação em Warbands
+        atualizarParticipacaoWarband(membro.user.id)
+
+        console.log(
+          `📊 Participação em Warbands registrada para ${membro.user.username}`
+        )
+      })
+    }
+
     // Força uma espera até faltarem exatamente 4 minutos
     await new Promise((resolve) => setTimeout(resolve, 1 * 60 * 1000))
 
@@ -842,6 +916,127 @@ function processarMensagem(textoMensagem) {
   return resultado
 }
 
+// Função auxiliar para registrar dados do jogador no banco de dados
+function registrarJogador(discordId, discordUsername) {
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO jogadores (discord_id, discord_username)
+    VALUES (?, ?)
+  `)
+  stmt.run(discordId, discordUsername)
+}
+
+// Função auxiliar para atualizar dados do jogador quando ele participa (conectado canal de voz)
+function atualizarParticipacaoWarband(discordId) {
+  const agora = new Date().toISOString()
+
+  const stmt = db.prepare(`
+    UPDATE jogadores
+    SET total_warbands = total_warbands + 1,
+        datas_warbands = json_insert(datas_warbands, '$[0]', ?)
+    WHERE discord_id = ?
+  `)
+
+  stmt.run(agora, discordId)
+}
+
+// Função auxiliar para atualizar o tempo total de participação em Warbands
+function adicionarTempoWarband(discordId, segundos) {
+  const stmt = db.prepare(`
+    UPDATE jogadores
+    SET tempo_warbands = tempo_warbands + ?
+    WHERE discord_id = ?
+  `)
+
+  stmt.run(segundos, discordId)
+}
+
+// Função auxiliar para atualizar a quantidade de mundos reportados pelo jogador no canal de texto
+function atualizarMundosReportados(discordId) {
+  const stmt = db.prepare(`
+    UPDATE jogadores SET mundos_reportados = mundos_reportados + 1 WHERE discord_id = ?
+  `)
+
+  stmt.run(discordId)
+}
+
+// Função auxiliar para atualizar a quantidade total de suprimentos informados pelo jogador
+function atualizarSuprimentosReportados(discordId, suprimento) {
+  const jogador = db
+    .prepare(
+      `SELECT suprimentos_reportados FROM jogadores WHERE discord_id = ?`
+    )
+    .get(discordId)
+
+  let suprimentos = JSON.parse(jogador.suprimentos_reportados || "{}")
+  suprimentos[suprimento] = (suprimentos[suprimento] || 0) + 1
+
+  const stmt = db.prepare(`
+    UPDATE jogadores SET suprimentos_reportados = ? WHERE discord_id = ?
+  `)
+
+  stmt.run(JSON.stringify(suprimentos), discordId)
+}
+
+// Função auxiliar para configurar o RSN do jogador no banco de dados
+function atualizarRSN(discordId, novoRSN) {
+  const jogador = db
+    .prepare("SELECT historico_rsns FROM jogadores WHERE discord_id=?")
+    .get(discordId)
+
+  let historicoRsns = JSON.parse(jogador.historico_rsns || "[]")
+
+  if (!historicoRsns.includes(novoRSN)) historicoRsns.unshift(novoRSN)
+
+  const stmt = db.prepare(`
+      UPDATE jogadores SET rsn_atual=?, historico_rsns=? WHERE discord_id=?
+   `)
+
+  stmt.run(novoRSN, JSON.stringify(historicoRsns), discordId)
+}
+
+//Função auxiliar para configurar o clã do jogador no banco de dados
+function atualizarClanJogador(discordId, novoClan) {
+  const jogador = db
+    .prepare(`SELECT historico_clans FROM jogadores WHERE discord_id=?`)
+    .get(discordId)
+
+  let historicoClans = JSON.parse(jogador.historico_clans || "[]")
+
+  if (!historicoClans.includes(novoClan)) historicoClans.unshift(novoClan)
+
+  const stmt = db.prepare(`
+       UPDATE jogadores SET clan_atual=?,historico_clans=? WHERE discord_id=?
+   `)
+
+  stmt.run(novoClan, JSON.stringify(historicoClans), discordId)
+}
+
+// Função auxiliar para registrar advertências do jogador no banco de dados
+function aplicarAdvertencia(discordId) {
+  const agora = new Date().toISOString()
+
+  const stmt = db.prepare(`
+       UPDATE jogadores SET advertencias=advertencias+1,
+       datas_advertencias=json_insert(datas_advertencias,'$[0]',?)
+       WHERE discord_id=?
+   `)
+
+  stmt.run(agora, discordId)
+}
+
+// Função auxiliar para registrar suspensões do jogador no banco de dados
+function aplicarSuspensao(discordId) {
+  const agora = new Date().toISOString()
+
+  const stmt = db.prepare(`
+       UPDATE jogadores SET suspensoes=suspensoes+1,
+       datas_suspensoes=json_insert(datas_suspensoes,'$[0]',?)
+       WHERE discord_id=?
+   `)
+
+  stmt.run(agora, discordId)
+}
+
 // Funções auxiliares para o comando /botstatus
 function formatarBytes(bytes) {
   const units = ["B", "KB", "MB", "GB"]
@@ -872,6 +1067,8 @@ client.once("ready", async () => {
       cmdList,
       cmdTable,
       cmdTimelist,
+      cmdSetRSN,
+      cmdSetClan,
       cmdPing,
       cmdBotstatus,
     ])
@@ -896,6 +1093,91 @@ client.once("ready", async () => {
     }
 
     console.log("✅ Jobs cron configurados com sucesso")
+
+    setInterval(async () => {
+      try {
+        // Obter a data e hora atuais
+        const agora = new Date()
+
+        // Obter o dia da semana atual em formato compatível com as chaves do arquivo horarios.json
+        const diaSemanaCompleto = agora
+          .toLocaleString("pt-BR", {
+            weekday: "long",
+            timeZone: "UTC",
+          })
+          .toLowerCase()
+
+        // Mapear para os dias sem acento conforme o arquivo horarios.json
+        const mapaDiasSemana = {
+          domingo: "domingo",
+          "segunda-feira": "segunda",
+          "terça-feira": "terca",
+          "quarta-feira": "quarta",
+          "quinta-feira": "quinta",
+          "sexta-feira": "sexta",
+          sábado: "sabado",
+        }
+
+        const diaSemanaAtual = mapaDiasSemana[diaSemanaCompleto] || null
+
+        if (!diaSemanaAtual) {
+          console.error(
+            `❌ Dia da semana "${diaSemanaCompleto}" não encontrado no mapa.`
+          )
+          return
+        }
+
+        const horariosHoje = horariosWarbands[diaSemanaAtual]
+
+        if (!horariosHoje) {
+          console.log(
+            `Nenhum horário encontrado para hoje (${diaSemanaAtual}).`
+          )
+          return
+        }
+
+        // Verifica se estamos dentro do período de 30 minutos após uma Warbands
+        const emWarbands = horariosHoje.some((horario) => {
+          const [hora, minuto] = horario.split(":").map(Number)
+
+          // Criar uma data em UTC para comparação correta
+          const dataWB = new Date()
+          dataWB.setUTCHours(hora, minuto, 0, 0)
+
+          // Diferença em minutos
+          const diferencaMinutos = (agora - dataWB) / (1000 * 60)
+          return diferencaMinutos >= 0 && diferencaMinutos <= 30
+        })
+
+        if (!emWarbands) {
+          return
+        }
+
+        console.log(
+          "✅ Warbands em andamento detectada! Registrando tempo de participação..."
+        )
+
+        // Se estamos em período de Warbands, registra tempo para jogadores no canal de voz
+        const canalVozWarbands = await client.channels.fetch(
+          process.env.CANAL_VOZ_WARBANDS
+        )
+
+        if (canalVozWarbands.members && canalVozWarbands.members.size > 0) {
+          canalVozWarbands.members.forEach((membro) => {
+            registrarJogador(membro.user.id, membro.user.username)
+            adicionarTempoWarband(membro.user.id, 60) // Adiciona 1 minuto ao tempo total do jogador
+          })
+
+          console.log(
+            `⏱️ Tempo de participação em Warbands atualizado para ${canalVozWarbands.members.size} jogadores`
+          )
+        }
+      } catch (erro) {
+        console.error(
+          `❌ Erro ao registrar tempo de participação: ${erro.message}`
+        )
+      }
+    }, 1 * 60 * 1000) // Executa a cada 1 minuto
 
     // Intervalo para chamar automaticamente função de verificar mundos que caíram
     setInterval(verificarMundosQueCairam, 15 * 1000)
@@ -981,6 +1263,16 @@ client.on("messageCreate", async (mensagem) => {
           console.log(
             `✅ Mundo ${resultado.mundo} atualizado por ${reportador.nickname} com novas informações`
           )
+          // Atualizar dados do jogador no banco de dados
+          registrarJogador(mensagem.author.id, mensagem.author.username)
+          if (resultado.suprimentos) {
+            resultado.suprimentos.forEach((suprimento) => {
+              atualizarSuprimentosReportados(mensagem.author.id, suprimento)
+            })
+          }
+          console.log(
+            `📊 Dados do jogador ${mensagem.author.username} atualizados no banco de dados`
+          )
         } else if (resultado.loc) {
           const novoMundo = {
             mundo: resultado.mundo,
@@ -1009,6 +1301,17 @@ client.on("messageCreate", async (mensagem) => {
           mundos.push(novoMundo)
           console.log(
             `✅ Novo mundo ${resultado.mundo} adicionado por ${reportador.nickname} com todas as informações disponíveis`
+          )
+          // Atualizar dados do jogador no banco de dados
+          registrarJogador(mensagem.author.id, mensagem.author.username)
+          atualizarMundosReportados(mensagem.author.id)
+          if (resultado.suprimentos) {
+            resultado.suprimentos.forEach((suprimento) => {
+              atualizarSuprimentosReportados(mensagem.author.id, suprimento)
+            })
+          }
+          console.log(
+            `📊 Dados do jogador ${mensagem.author.username} atualizados no banco de dados`
           )
         } else {
           await mensagem.reply(
@@ -1246,6 +1549,64 @@ client.on("interactionCreate", async (interaction) => {
       console.error(`❌ Erro ao executar /Timelist: ${erro.message}`)
       await interaction.reply({
         content: "❌ Ocorreu um erro ao gerar a lista de tempos!",
+        ephemeral: true,
+      })
+    }
+  }
+  if (interaction.commandName === "setrsn") {
+    // Verifica se o usuário tem permissão de administrador
+    if (!interaction.member.permissions.has("ADMINISTRATOR")) {
+      await interaction.reply({
+        content: "❌ Você não tem permissão para usar este comando!",
+        ephemeral: true,
+      })
+      return
+    }
+
+    const jogador = interaction.options.getUser("jogador")
+    const rsn = interaction.options.getString("rsn")
+
+    try {
+      registrarJogador(jogador.id, jogador.username)
+      atualizarRSN(jogador.id, rsn)
+
+      await interaction.reply({
+        content: `✅ RSN de ${jogador.username} definido como \`${rsn}\``,
+        ephemeral: true,
+      })
+    } catch (erro) {
+      console.error(`❌ Erro ao definir RSN: ${erro.message}`)
+      await interaction.reply({
+        content: "❌ Ocorreu um erro ao definir o RSN!",
+        ephemeral: true,
+      })
+    }
+  }
+  if (interaction.commandName === "setclan") {
+    // Verifica se o usuário tem permissão de administrador
+    if (!interaction.member.permissions.has("ADMINISTRATOR")) {
+      await interaction.reply({
+        content: "❌ Você não tem permissão para usar este comando!",
+        ephemeral: true,
+      })
+      return
+    }
+
+    const jogador = interaction.options.getUser("jogador")
+    const clan = interaction.options.getString("clan")
+
+    try {
+      registrarJogador(jogador.id, jogador.username)
+      atualizarClanJogador(jogador.id, clan)
+
+      await interaction.reply({
+        content: `✅ Clã de ${jogador.username} definido como \`${clan}\``,
+        ephemeral: true,
+      })
+    } catch (erro) {
+      console.error(`❌ Erro ao definir clã: ${erro.message}`)
+      await interaction.reply({
+        content: "❌ Ocorreu um erro ao definir o clã!",
         ephemeral: true,
       })
     }
