@@ -138,22 +138,27 @@ function obterEmoji(nomeEmoji) {
   }
 }
 
-// Registra o comando slash "list"
+// Registra o comando slash /list
 const cmdList = new SlashCommandBuilder()
   .setName("list")
   .setDescription("🧾 Lista os mundos reportados organizados por localidade")
 
-// Registra o comando slash "quadro"
+// Registra o comando slash /timelist
 const cmdTable = new SlashCommandBuilder()
   .setName("table")
   .setDescription(
     "🖼️ Exibe um quadro com as informações dos mundos reportados em formato de tabela"
   )
 
-// Registra o comando /timelist (quadro de tempos restantes)
+// Registra o comando slash /timelist (quadro de tempos restantes)
 const cmdTimelist = new SlashCommandBuilder()
   .setName("timelist")
   .setDescription("⏰ Exibe uma lista dos mundos com tempo restante conhecido")
+
+// Registra o comando slash /horarios (conferir horários das Warbands)
+const cmdHorarios = new SlashCommandBuilder()
+  .setName("horarios")
+  .setDescription("📅 Exibe os horários semanais de Warbands")
 
 // Definindo o comando /ping
 const cmdPing = new SlashCommandBuilder()
@@ -165,7 +170,7 @@ const cmdBotstatus = new SlashCommandBuilder()
   .setName("botstatus")
   .setDescription("🤖 Exibe informações detalhadas sobre o status do bot")
 
-// Registra o comando SetRSN usado por administradores para salvar o RSN dos jogadores slash
+// Registra o comando slash /SetRSN (administradores - salvar o RSN dos jogadores)
 const cmdSetRSN = new SlashCommandBuilder()
   .setName("setrsn")
   .setDescription("Define o RSN (RuneScape Name) de um jogador")
@@ -182,7 +187,7 @@ const cmdSetRSN = new SlashCommandBuilder()
       .setRequired(true)
   )
 
-// Registra o comando Set Clan usado por administrador para salvar o clã de um jogador
+// Registra o comando slash /SetClan (administradores - salvar o clã de um jogador)
 const cmdSetClan = new SlashCommandBuilder()
   .setName("setclan")
   .setDescription("Define o clã de um jogador")
@@ -994,7 +999,7 @@ function atualizarRSN(discordId, novoRSN) {
   stmt.run(novoRSN, JSON.stringify(historicoRsns), discordId)
 }
 
-//Função auxiliar para configurar o clã do jogador no banco de dados
+// Função auxiliar para configurar o clã do jogador no banco de dados
 function atualizarClanJogador(discordId, novoClan) {
   const jogador = db
     .prepare(`SELECT historico_clans FROM jogadores WHERE discord_id=?`)
@@ -1037,6 +1042,247 @@ function aplicarSuspensao(discordId) {
   stmt.run(agora, discordId)
 }
 
+// Função auxiliar para gerar quadro de horários (/horarios)
+function gerarQuadroHorarios(fusoHorario = "BR") {
+  // Mapear dias da semana para exibição
+  const diasSemana = [
+    "Domingo",
+    "Segunda",
+    "Terça",
+    "Quarta",
+    "Quinta",
+    "Sexta",
+    "Sábado",
+  ]
+
+  // Inicializar objeto para armazenar horários por dia da semana
+  const horariosFuso = {
+    0: [], // Domingo
+    1: [], // Segunda
+    2: [], // Terça
+    3: [], // Quarta
+    4: [], // Quinta
+    5: [], // Sexta
+    6: [], // Sábado
+  }
+
+  // Ajuste do fuso horário (-3 para Brasil, 0 para UTC)
+  const ajusteFuso = fusoHorario === "BR" ? -3 : 0
+
+  // Mapear dias da semana para índices
+  const mapaDias = {
+    domingo: 0,
+    segunda: 1,
+    terca: 2,
+    quarta: 3,
+    quinta: 4,
+    sexta: 5,
+    sabado: 6,
+  }
+
+  // Processar cada dia e seus horários
+  for (const [dia, horarios] of Object.entries(horariosWarbands)) {
+    const indiceDia = mapaDias[dia]
+
+    // Converter cada horário para o fuso escolhido
+    horarios.forEach((horario) => {
+      const [hora, minuto] = horario.split(":").map(Number)
+
+      // Ajustar hora conforme o fuso
+      let horaAjustada = hora + ajusteFuso
+      let indiceDiaAjustado = indiceDia
+
+      // Ajustar dia se o horário for anterior à meia-noite
+      if (horaAjustada < 0) {
+        horaAjustada += 24
+        indiceDiaAjustado = (indiceDiaAjustado - 1 + 7) % 7
+      }
+
+      // Ajustar dia se o horário for após às 23:59
+      if (horaAjustada >= 24) {
+        horaAjustada -= 24
+        indiceDiaAjustado = (indiceDiaAjustado + 1) % 7
+      }
+
+      // Formatar o horário ajustado
+      const horarioFormatado = `${String(horaAjustada).padStart(
+        2,
+        "0"
+      )}:${String(minuto).padStart(2, "0")}`
+
+      // Adicionar ao dia correto
+      horariosFuso[indiceDiaAjustado].push(horarioFormatado)
+    })
+  }
+
+  // Ordenar os horários de cada dia
+  for (let i = 0; i < 7; i++) {
+    horariosFuso[i].sort((a, b) => {
+      const [horaA, minutoA] = a.split(":").map(Number)
+      const [horaB, minutoB] = b.split(":").map(Number)
+      return horaA * 60 + minutoA - (horaB * 60 + minutoB)
+    })
+  }
+
+  // Preparar dados para a tabela
+  const dados = [diasSemana]
+
+  // Encontrar o máximo de horários em um dia
+  const maxHorarios = Math.max(
+    ...Object.values(horariosFuso).map((h) => h.length)
+  )
+
+  // Preencher linhas de horários
+  for (let i = 0; i < maxHorarios; i++) {
+    const linha = []
+
+    for (let dia = 0; dia < 7; dia++) {
+      linha.push(
+        horariosFuso[dia] && i < horariosFuso[dia].length
+          ? horariosFuso[dia][i]
+          : ""
+      )
+    }
+
+    dados.push(linha)
+  }
+
+  // Configuração da tabela
+  const config = {
+    border: {
+      topBody: `─`,
+      topJoin: `┬`,
+      topLeft: `┌`,
+      topRight: `┐`,
+      bottomBody: `─`,
+      bottomJoin: `┴`,
+      bottomLeft: `└`,
+      bottomRight: `┘`,
+      bodyLeft: `│`,
+      bodyRight: `│`,
+      bodyJoin: `│`,
+      joinBody: `─`,
+      joinLeft: `├`,
+      joinRight: `┤`,
+      joinJoin: `┼`,
+    },
+    header: {
+      alignment: "center",
+      content:
+        fusoHorario === "BR"
+          ? "Horários de Warbands (Brasil GMT -03h00)"
+          : "Horários de Warbands (Horário Oficial do Jogo GMT 00h00)",
+    },
+  }
+
+  return table(dados, config)
+}
+
+// Função auxiliar para calcular tempo próxima Warbands (/horarios)
+function calcularTempoProximaWarbands() {
+  const agora = new Date()
+
+  // Obter o dia da semana atual
+  const diaSemanaCompleto = agora
+    .toLocaleString("pt-BR", {
+      weekday: "long",
+      timeZone: "UTC",
+    })
+    .toLowerCase()
+
+  // Mapear para os dias sem acento
+  const mapaDiasSemana = {
+    domingo: "domingo",
+    "segunda-feira": "segunda",
+    "terça-feira": "terca",
+    "quarta-feira": "quarta",
+    "quinta-feira": "quinta",
+    "sexta-feira": "sexta",
+    sábado: "sabado",
+  }
+
+  const diaSemanaAtual = mapaDiasSemana[diaSemanaCompleto]
+
+  // Obter todos os horários da semana
+  const todosHorarios = []
+
+  // Dias da semana em ordem
+  const diasSemana = [
+    "domingo",
+    "segunda",
+    "terca",
+    "quarta",
+    "quinta",
+    "sexta",
+    "sabado",
+  ]
+
+  // Índice do dia atual
+  const indiceDiaAtual = diasSemana.indexOf(diaSemanaAtual)
+
+  // Adicionar horários dos próximos 7 dias
+  for (let i = 0; i < 7; i++) {
+    const indice = (indiceDiaAtual + i) % 7
+    const dia = diasSemana[indice]
+    const horariosDia = horariosWarbands[dia] || []
+
+    horariosDia.forEach((horario) => {
+      const [hora, minuto] = horario.split(":").map(Number)
+
+      // Criar data para este horário
+      const dataHorario = new Date(agora)
+      dataHorario.setUTCDate(dataHorario.getUTCDate() + i)
+      dataHorario.setUTCHours(hora, minuto, 0, 0)
+
+      // Só adicionar se for no futuro
+      if (dataHorario > agora) {
+        todosHorarios.push(dataHorario)
+      }
+    })
+  }
+
+  // Ordenar horários
+  todosHorarios.sort((a, b) => a - b)
+
+  // Pegar o próximo horário
+  const proximoHorario = todosHorarios[0]
+
+  if (!proximoHorario) {
+    return "Não foi possível calcular o tempo para a próxima Warbands"
+  }
+
+  // Calcular diferença em milissegundos
+  const diferencaMs = proximoHorario - agora
+
+  // Converter para horas e minutos
+  const horas = Math.floor(diferencaMs / (1000 * 60 * 60))
+  const minutos = Math.floor((diferencaMs % (1000 * 60 * 60)) / (1000 * 60))
+
+  return `${obterEmoji("notify")} Faltam atualmente \`${horas}h${minutos
+    .toString()
+    .padStart(2, "0")}\` para a próxima **Warbands**`
+}
+
+// Função auxiliar para calcular tempo até o reset
+function calcularTempoAteReset() {
+  const agora = new Date()
+
+  // Criar data do próximo reset (próxima meia-noite UTC)
+  const proximoReset = new Date(agora)
+  proximoReset.setUTCHours(24, 0, 0, 0)
+
+  // Calcular diferença em milissegundos
+  const diferencaMs = proximoReset - agora
+
+  // Converter para horas e minutos
+  const horas = Math.floor(diferencaMs / (1000 * 60 * 60))
+  const minutos = Math.floor((diferencaMs % (1000 * 60 * 60)) / (1000 * 60))
+
+  return `${obterEmoji("loop2")} Faltam atualmente \`${horas}h${minutos
+    .toString()
+    .padStart(2, "0")}\` para o horário de **reset**`
+}
+
 // Funções auxiliares para o comando /botstatus
 function formatarBytes(bytes) {
   const units = ["B", "KB", "MB", "GB"]
@@ -1067,6 +1313,7 @@ client.once("ready", async () => {
       cmdList,
       cmdTable,
       cmdTimelist,
+      cmdHorarios,
       cmdSetRSN,
       cmdSetClan,
       cmdPing,
@@ -1549,6 +1796,97 @@ client.on("interactionCreate", async (interaction) => {
       console.error(`❌ Erro ao executar /Timelist: ${erro.message}`)
       await interaction.reply({
         content: "❌ Ocorreu um erro ao gerar a lista de tempos!",
+        ephemeral: true,
+      })
+    }
+  }
+  if (interaction.commandName === "horarios") {
+    try {
+      // Criar o select menu para escolher o fuso horário
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId("fusoHorario")
+        .setPlaceholder("Escolha o fuso horário")
+        .addOptions([
+          new StringSelectMenuOptionBuilder()
+            .setLabel("Horários do Brasil (GMT -03h00)")
+            .setDescription("Exibir horários no fuso de Brasília")
+            .setValue("BR")
+            .setDefault(true),
+          new StringSelectMenuOptionBuilder()
+            .setLabel("Horários Oficiais do Jogo (GMT 00h00)")
+            .setDescription("Exibir horários em UTC (horário do jogo)")
+            .setValue("UTC"),
+        ])
+
+      const row = new ActionRowBuilder().addComponents(selectMenu)
+
+      // Gerar tabela de horários (padrão: Brasil)
+      const tabelaHorarios = gerarQuadroHorarios("BR")
+
+      // Calcular tempo até a próxima Warbands
+      const tempoProximaWarbands = calcularTempoProximaWarbands()
+
+      // Calcular tempo até o reset
+      const tempoAteReset = calcularTempoAteReset()
+
+      // Enviar resposta
+      await interaction.reply({
+        content: `${obterEmoji(
+          "relogio"
+        )} **Horários Semanais de Warbands**\n\n\`\`\`\n${tabelaHorarios}\n\`\`\`\n${tempoProximaWarbands}\n${tempoAteReset}`,
+        components: [row],
+      })
+
+      // Obter a mensagem de resposta usando fetchReply
+      const mensagemInicial = await interaction.fetchReply()
+
+      // Criar coletor para o select menu
+      const collector = mensagemInicial.createMessageComponentCollector({
+        time: 60000, // Menu ativo por 1 minuto
+      })
+
+      collector.on("collect", async (i) => {
+        if (i.customId === "fusoHorario") {
+          const fusoSelecionado = i.values[0]
+          const novaTabela = gerarQuadroHorarios(fusoSelecionado)
+
+          // Criar um novo menu com as opções atualizadas
+          const novoSelectMenu = new StringSelectMenuBuilder()
+            .setCustomId("fusoHorario")
+            .setPlaceholder("Escolha o fuso horário")
+            .addOptions([
+              new StringSelectMenuOptionBuilder()
+                .setLabel("Horários do Brasil (GMT -03h00)")
+                .setDescription("Exibir horários no fuso de Brasília")
+                .setValue("BR")
+                .setDefault(fusoSelecionado === "BR"),
+              new StringSelectMenuOptionBuilder()
+                .setLabel("Horários Oficiais do Jogo (GMT 00h00)")
+                .setDescription("Exibir horários em UTC (horário do jogo)")
+                .setValue("UTC")
+                .setDefault(fusoSelecionado === "UTC"),
+            ])
+
+          const novaRow = new ActionRowBuilder().addComponents(novoSelectMenu)
+
+          await i.update({
+            content: `**Horários Semanais de Warbands**\n\`\`\`\n${novaTabela}\n\`\`\`\n${tempoProximaWarbands}\n${tempoAteReset}`,
+            components: [novaRow],
+          })
+        }
+      })
+
+      collector.on("end", async () => {
+        // Desabilita o menu após 1 minuto
+        selectMenu.setDisabled(true)
+        await mensagemInicial.edit({
+          components: [new ActionRowBuilder().addComponents(selectMenu)],
+        })
+      })
+    } catch (erro) {
+      console.error(`❌ Erro ao executar /horarios: ${erro.message}`)
+      await interaction.reply({
+        content: "❌ Ocorreu um erro ao gerar os horários!",
         ephemeral: true,
       })
     }
