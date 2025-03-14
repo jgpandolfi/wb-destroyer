@@ -590,6 +590,37 @@ function gerarTabela() {
   return table(dados, config)
 }
 
+// Função auxiliar para processar os pares de canais de voz (pré-wb e wb)
+function obterParesCanalVoz() {
+  const paresString = process.env.CANAIS_VOZ_PARES || ""
+  const pares = []
+
+  if (!paresString) {
+    console.error(
+      "❌ Erro: CANAIS_VOZ_PARES não está configurado no arquivo .env"
+    )
+    return pares
+  }
+
+  paresString.split(",").forEach((par) => {
+    const [preWarbands, warbands] = par.split(":")
+    if (preWarbands && warbands) {
+      pares.push({
+        preWarbands: preWarbands.trim(),
+        warbands: warbands.trim(),
+      })
+    }
+  })
+
+  if (pares.length === 0) {
+    console.error("❌ Erro: Nenhum par de canais de voz válido encontrado")
+  } else {
+    console.log(`✅ ${pares.length} pares de canais de voz configurados`)
+  }
+
+  return pares
+}
+
 // Função auxiliar do Ciclo de Ações de Warbands (vinculada ao node-cron)
 async function executarCicloWarbands(horarioWarbands) {
   try {
@@ -611,34 +642,44 @@ async function executarCicloWarbands(horarioWarbands) {
     console.log("✅ Lista de mundos resetada")
 
     // AÇÃO 3 - Mover usuários entre canais de voz
-    const canalOrigemId = process.env.CANAL_VOZ_PRE_WARBANDS.trim()
-    const canalDestinoId = process.env.CANAL_VOZ_WARBANDS.trim()
+    const paresCanalVoz = obterParesCanalVoz()
+    let jogadoresMovidos = 0
 
-    const canalOrigem = await client.channels.fetch(canalOrigemId)
-    if (canalOrigem.members.size > 0) {
-      canalOrigem.members.forEach(async (membro) => {
-        await membro.voice.setChannel(canalDestinoId).catch(console.error)
-      })
-      console.log(
-        "✅ Usuários movidos do Canal de Voz da Pré-WB para o Canal de Voz da Warbands"
-      )
-    }
+    // Para cada par de canais configurado
+    for (const par of paresCanalVoz) {
+      try {
+        const canalOrigem = await client.channels.fetch(par.preWarbands)
+        const canalDestino = await client.channels.fetch(par.warbands)
 
-    // Registra a participação dos jogadores que estão no canal de voz
-    const canalVozWarbands = await client.channels.fetch(canalDestinoId)
-    if (canalVozWarbands.members && canalVozWarbands.members.size > 0) {
-      canalVozWarbands.members.forEach((membro) => {
-        // Registra o jogador no banco (se ainda não estiver registrado)
-        registrarJogador(membro.user.id, membro.user.username)
+        if (
+          canalOrigem &&
+          canalDestino &&
+          canalOrigem.members &&
+          canalOrigem.members.size > 0
+        ) {
+          for (const [memberId, membro] of canalOrigem.members) {
+            await membro.voice.setChannel(canalDestino.id).catch(console.error)
+            jogadoresMovidos++
+          }
 
-        // Atualiza a participação em Warbands
-        atualizarParticipacaoWarband(membro.user.id)
-
-        console.log(
-          `📊 Participação em Warbands registrada para ${membro.user.username}`
+          // Registra a participação dos jogadores que estão no canal de voz de destino
+          if (canalDestino.members && canalDestino.members.size > 0) {
+            canalDestino.members.forEach((membro) => {
+              registrarJogador(membro.user.id, membro.user.username)
+              atualizarParticipacaoWarband(membro.user.id)
+            })
+          }
+        }
+      } catch (erro) {
+        console.error(
+          `❌ Erro ao mover usuários do canal ${par.preWarbands} para ${par.warbands}: ${erro.message}`
         )
-      })
+      }
     }
+
+    console.log(
+      `✅ ${jogadoresMovidos} jogadores movidos dos canais de Pré-WB para os canais de Warbands`
+    )
 
     // Força uma espera até faltarem exatamente 4 minutos
     await new Promise((resolve) => setTimeout(resolve, 1 * 60 * 1000))
@@ -1450,19 +1491,35 @@ client.once("ready", async () => {
           "✅ Warbands em andamento detectada! Registrando tempo de participação..."
         )
 
-        // Se estamos em período de Warbands, registra tempo para jogadores no canal de voz
-        const canalVozWarbands = await client.channels.fetch(
-          process.env.CANAL_VOZ_WARBANDS
-        )
+        // Se estamos em período de Warbands, registra tempo para jogadores nos canais de voz
+        const paresCanalVoz = obterParesCanalVoz()
+        let totalJogadores = 0
 
-        if (canalVozWarbands.members && canalVozWarbands.members.size > 0) {
-          canalVozWarbands.members.forEach((membro) => {
-            registrarJogador(membro.user.id, membro.user.username)
-            adicionarTempoWarband(membro.user.id, 60) // Adiciona 1 minuto ao tempo total do jogador
-          })
+        for (const par of paresCanalVoz) {
+          try {
+            const canalVozWarbands = await client.channels.fetch(par.warbands)
 
+            if (
+              canalVozWarbands &&
+              canalVozWarbands.members &&
+              canalVozWarbands.members.size > 0
+            ) {
+              canalVozWarbands.members.forEach((membro) => {
+                registrarJogador(membro.user.id, membro.user.username)
+                adicionarTempoWarband(membro.user.id, 60) // Adiciona 1 minuto ao tempo total do jogador
+                totalJogadores++
+              })
+            }
+          } catch (erro) {
+            console.error(
+              `❌ Erro ao registrar tempo para o canal ${par.warbands}: ${erro.message}`
+            )
+          }
+        }
+
+        if (totalJogadores > 0) {
           console.log(
-            `⏱️ Tempo de participação em Warbands atualizado para ${canalVozWarbands.members.size} jogadores`
+            `⏱️ Tempo de participação em Warbands atualizado para ${totalJogadores} jogadores`
           )
         }
       } catch (erro) {
