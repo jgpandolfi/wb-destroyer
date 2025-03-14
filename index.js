@@ -1148,6 +1148,7 @@ function gerarQuadroHorarios(fusoHorario = "BR") {
   }
 
   // Configuração da tabela
+  // Configuração da tabela
   const config = {
     border: {
       topBody: `─`,
@@ -1166,6 +1167,50 @@ function gerarQuadroHorarios(fusoHorario = "BR") {
       joinRight: `┤`,
       joinJoin: `┼`,
     },
+    columns: {
+      0: {
+        alignment: "center",
+        width: 8,
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      1: {
+        alignment: "center",
+        width: 8,
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      2: {
+        alignment: "center",
+        width: 8,
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      3: {
+        alignment: "center",
+        width: 8,
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      4: {
+        alignment: "center",
+        width: 8,
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      5: {
+        alignment: "center",
+        width: 8,
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+      6: {
+        alignment: "center",
+        width: 8,
+        wrapWord: false,
+        verticalAlignment: "middle",
+      },
+    },
     header: {
       alignment: "center",
       content:
@@ -1173,6 +1218,7 @@ function gerarQuadroHorarios(fusoHorario = "BR") {
           ? "Horários de Warbands (Brasil GMT -03h00)"
           : "Horários de Warbands (Horário Oficial do Jogo GMT 00h00)",
     },
+    drawHorizontalLine: () => true,
   }
 
   return table(dados, config)
@@ -1833,7 +1879,7 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.reply({
         content: `${obterEmoji(
           "relogio"
-        )} **Horários Semanais de Warbands**\n\n\`\`\`\n${tabelaHorarios}\n\`\`\`\n${tempoProximaWarbands}\n${tempoAteReset}`,
+        )} **Horários Semanais de Warbands**\n\`\`\`\n${tabelaHorarios}\n\`\`\`\n${tempoProximaWarbands}\n${tempoAteReset}`,
         components: [row],
       })
 
@@ -1870,7 +1916,9 @@ client.on("interactionCreate", async (interaction) => {
           const novaRow = new ActionRowBuilder().addComponents(novoSelectMenu)
 
           await i.update({
-            content: `**Horários Semanais de Warbands**\n\`\`\`\n${novaTabela}\n\`\`\`\n${tempoProximaWarbands}\n${tempoAteReset}`,
+            content: `${obterEmoji(
+              "relogio"
+            )} **Horários Semanais de Warbands**\n\`\`\`\n${novaTabela}\n\`\`\`\n${tempoProximaWarbands}\n${tempoAteReset}`,
             components: [novaRow],
           })
         }

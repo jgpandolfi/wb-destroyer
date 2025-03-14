@@ -123,6 +123,7 @@ Este projeto foi desenvolvido utilizando:
 - **Estruturar a captura, tratamento e armazenamento de dados de jogadores:** preparar o terreno para começar a contabilizar estatísticas dos jogadores
 - **Registrar todos os participantes:** registrar todos os jogadores (Discord ID) que estiveram presentes no canal de voz da wb durante o evento
 - **Registrar reportes do jogador:** contabilizar estatísticas de dados enviados pelos jogadores
+- **Comando /horarios:** exibir aos jogadores um quadro com os horários das waves de Warbands
 
 **🟡 Em desenvolvimento:**
 
